@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0D0D11;
+  --neon-green: #00FF66;
+  --danger-red: #FF3333;
+  --text-primary: #FFFFFF;
+  --text-secondary: #888899;
+  --card-bg: #13131A;
+  --card-border: #1E1E2E;
+  --card-hover-border: #00FF66;
+}
+
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+/* ── Dot-matrix pulse animation ── */
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.15; transform: scale(0.8); }
+  50%       { opacity: 1;    transform: scale(1.2); }
+}
+
+/* ── Breathing glow for CTA buttons ── */
+@keyframes breathe-glow {
+  0%, 100% { box-shadow: 0 0 8px 2px rgba(0,255,102,0.25); }
+  50%       { box-shadow: 0 0 22px 6px rgba(0,255,102,0.65); }
+}
+
+/* ── Ticker scroll (seamless: content is doubled, animate 0 → -50%) ── */
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ── Scanline flicker ── */
+@keyframes scanline {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 100px; }
+}
+
+/* ── Card neon shimmer ── */
+@keyframes neon-shimmer {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+/* ── Drawer slide-in from right ── */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+/* ── Drawer slide-in from bottom ── */
+@keyframes slide-in-bottom {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #0D0D11; }
+::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #00FF66; }
