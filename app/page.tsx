@@ -22,7 +22,9 @@ import {
   RefreshCw,
   Radio,
   CalendarDays,
-  Timer
+  Timer,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 // ==========================================
@@ -187,6 +189,97 @@ const TEAM_API_ID_MAP: Record<string, number> = {
 };
 
 // ==========================================
+// 确定性哈希函数：固化每日玄学运势（彻底根除跳字Bug）
+// ==========================================
+
+const getTodayDateString = (): string => {
+  const date = new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const getDeterministicHash = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+};
+
+const getDeterministicFortune = (key: string, dateStr: string): "大吉" | "中吉" | "平" | "凶" => {
+  const combined = `${key}-${dateStr}`;
+  const hash = getDeterministicHash(combined);
+  const options = ["大吉", "中吉", "平", "凶"] as const;
+  return options[hash % options.length];
+};
+
+const getDeterministicMetaphysics = (key: string, dateStr: string, baseMetaWinRate: number) => {
+  const hash = getDeterministicHash(`${key}-${dateStr}`);
+  const elements = ["金", "木", "水", "火", "土"] as const;
+  const baguas = ["乾为天", "坤为地", "震为雷", "巽为风", "坎为水", "离为火", "艮为山", "兑为泽"] as const;
+  const hours = [
+    "子时 (23:00-01:00)",
+    "寅时 (03:00-05:00)",
+    "辰时 (07:00-09:00)",
+    "午时 (11:00-13:00)",
+    "申时 (15:00-17:00)",
+    "戌时 (19:00-21:00)"
+  ] as const;
+  const zodiacs = ["属鼠", "属牛", "属虎", "属兔", "属龙", "属蛇", "属马", "属羊", "属猴", "属鸡", "属狗", "属猪"] as const;
+
+  const baguaMeanings: Record<string, string> = {
+    "乾为天": "刚健中正",
+    "坤为地": "厚德载物",
+    "震为雷": "临危不乱",
+    "巽为风": "顺雷震天",
+    "坎为水": "行险守信",
+    "离为火": "明照四方",
+    "艮为山": "动静得时",
+    "兑为泽": "刚内柔外"
+  };
+
+  const element = elements[hash % elements.length];
+  const bagua = baguas[(hash + 1) % baguas.length];
+  const favorableHour = hours[(hash + 2) % hours.length];
+  const clashZodiac = zodiacs[(hash + 3) % zodiacs.length];
+  const upsetChance = parseFloat((5 + (hash % 41)).toFixed(1));
+  const drift = (hash % 15) - 7;
+  const metaphysicsWinRate = parseFloat(Math.min(99, Math.max(1, baseMetaWinRate + drift)).toFixed(1));
+
+  return {
+    element,
+    bagua: `${bagua} (${baguaMeanings[bagua]})`,
+    favorableHour,
+    clashZodiac,
+    upsetChance,
+    metaphysicsWinRate
+  };
+};
+
+const getPlayerStats = (player: Player, dateStr: string) => {
+  const hash = getDeterministicHash(`${player.name}-${dateStr}`);
+  const condition = 85 + (hash % 15); // 85% - 99%
+  const tacticalFit = 78 + ((hash >> 2) % 20); // 78% - 97%
+  
+  let speed = "Standard";
+  if (player.value >= 30000000) {
+    speed = "Premium";
+  } else if (player.value >= 10000000) {
+    speed = "Optimal";
+  } else {
+    speed = (hash % 3 === 0) ? "Optimal" : "Standard";
+  }
+
+  return {
+    condition,
+    tacticalFit,
+    speed
+  };
+};
+
+// ==========================================
 // 2. 真实体验 Mock 数据 (A组) 及 B-L 组生成器
 // ==========================================
 
@@ -220,7 +313,7 @@ const groupATeams: Team[] = [
     roster: [
       { id: "usa-1", name: "克里斯蒂安·普利西奇", number: 10, position: "FW", age: 27, club: "AC米兰", fortune: "大吉", isCaptain: true, value: 48000000 },
       { id: "usa-2", name: "韦斯顿·麦肯尼", number: 8, position: "MF", age: 27, club: "尤文图斯", fortune: "大吉", isCaptain: false, value: 28000000 },
-      { id: "usa-3", name: "泰勒·亚当斯", number: 4, position: "MF", age: 27, club: "伯恩茅斯", fortune: "平", isCaptain: false, value: 25000000 },
+      { id: "usa-3", name: "泰勒·亚当斯", number: 4, position: "MF", age: 27, club: "防守硬汉", fortune: "平", isCaptain: false, value: 25000000 },
       { id: "usa-4", name: "蒂莫西·维阿", number: 21, position: "FW", age: 26, club: "尤文图斯", fortune: "中吉", isCaptain: false, value: 15000000 },
       { id: "usa-5", name: "尤纳斯·穆萨", number: 6, position: "MF", age: 23, club: "AC米兰", fortune: "平", isCaptain: false, value: 22000000 },
       { id: "usa-6", name: "安东尼·罗宾逊", number: 5, position: "DF", age: 28, club: "富勒姆", fortune: "中吉", isCaptain: false, value: 20000000 },
@@ -472,7 +565,7 @@ const groupATeams: Team[] = [
       { id: "uru-10", name: "何塞·希门尼斯", number: 2, position: "DF", age: 31, club: "马德里竞技", fortune: "平", isCaptain: false, value: 8000000 },
       { id: "uru-11", name: "塞瓦斯蒂安·卡塞雷斯", number: 3, position: "DF", age: 26, club: "美洲队", fortune: "中吉", isCaptain: false, value: 7000000 },
       { id: "uru-12", name: "吉列尔莫·瓦雷拉", number: 13, position: "DF", age: 33, club: "弗拉门戈", fortune: "平", isCaptain: false, value: 2000000 },
-      { id: "uru-13", name: "罗德里戈·本坦库尔", number: 6, position: "MF", age: 28, club: "托特纳姆热刺", fortune: "大吉", isCaptain: false, value: 35000000 },
+      { id: "uru-13", name: "罗德里哥·本坦库尔", number: 6, position: "MF", age: 28, club: "托特纳姆热刺", fortune: "大吉", isCaptain: false, value: 35000000 },
       { id: "uru-14", name: "法昆多·托雷斯", number: 10, position: "FW", age: 26, club: "奥兰多城", fortune: "平", isCaptain: false, value: 14000000 },
       { id: "uru-15", name: "布里安·罗德里格斯", number: 20, position: "FW", age: 26, club: "美洲队", fortune: "平", isCaptain: false, value: 4000000 },
       { id: "uru-16", name: "马克西米利亚诺·阿劳霍", number: 21, position: "FW", age: 26, club: "托卢卡", fortune: "中吉", isCaptain: false, value: 8500000 },
@@ -517,18 +610,19 @@ const groupATeams: Team[] = [
   }
 ];
 
-// B-L 组的代表国家及其配置
+// B-L 组的代表国家及其配置，确保严格划分到 L 组，一共 12 个小组，48 支球队
 const otherGroupConfigs = [
   { name: "B", teams: ["英格兰", "克罗地亚", "尼日利亚", "韩国"], flags: ["🏴󠁧󠁢󠁥󠁮󠁧󠁿", "🇭🇷", "🇳🇬", "🇰🇷"], codes: ["ENG", "CRO", "NGA", "KOR"] },
   { name: "C", teams: ["阿根廷", "瑞典", "沙特阿拉伯", "喀麦隆"], flags: ["🇦🇷", "🇸🇪", "🇸🇦", "🇨🇲"], codes: ["ARG", "SWE", "KSA", "CMR"] },
   { name: "D", teams: ["法国", "丹麦", "澳大利亚", "突尼斯"], flags: ["🇫🇷", "🇩🇰", "🇦🇺", "🇹🇳"], codes: ["FRA", "DEN", "AUS", "TUN"] },
   { name: "E", teams: ["西班牙", "日本", "哥斯达黎加", "阿尔及利亚"], flags: ["🇪🇸", "🇯🇵", "🇨🇷", "🇩🇿"], codes: ["ESP", "JPN", "CRC", "ALG"] },
-  { name: "F", teams: ["比利时", "摩洛哥", "新西兰", "科特迪瓦"], flags: ["🇧🇪", "🇲🇦", "🇳🇿", "🇨🇮"], codes: ["BEL", "MAR", "NZL", "CIV"] }, // ✅ 去除重复：加拿大→新西兰
+  { name: "F", teams: ["比利时", "摩洛哥", "新西兰", "科特迪瓦"], flags: ["🇧🇪", "🇲🇦", "🇳🇿", "🇨🇮"], codes: ["BEL", "MAR", "NZL", "CIV"] },
   { name: "G", teams: ["巴西", "瑞士", "塞尔维亚", "加纳"], flags: ["🇧🇷", "🇨🇭", "🇷🇸", "🇬🇭"], codes: ["BRA", "SUI", "SRB", "GHA"] },
-  { name: "H", teams: ["葡萄牙", "玻利维亚", "马里", "巴拉圭"], flags: ["🇵🇹", "🇧🇴", "🇲🇱", "🇵🇾"], codes: ["POR", "BOL", "MLI", "PAR"] }, // ✅ 去除重复：乌拉圭/加纳/韩国→玻利维亚/马里/巴拉圭
+  { name: "H", teams: ["葡萄牙", "玻利维亚", "马里", "巴拉圭"], flags: ["🇵🇹", "🇧🇴", "🇲🇱", "🇵🇾"], codes: ["POR", "BOL", "MLI", "PAR"] },
   { name: "I", teams: ["荷兰", "厄瓜多尔", "塞内加尔", "卡塔尔"], flags: ["🇳🇱", "🇪🇨", "🇸🇳", "🇶🇦"], codes: ["NED", "ECU", "SEN", "QAT"] },
   { name: "J", teams: ["意大利", "波兰", "伊朗", "巴拿马"], flags: ["🇮🇹", "🇵🇱", "🇮🇷", "🇵🇦"], codes: ["ITA", "POL", "IRN", "PAN"] },
   { name: "K", teams: ["德国", "智利", "伊拉克", "牙买加"], flags: ["🇩🇪", "🇨🇱", "🇮🇶", "🇯🇲"], codes: ["GER", "CHI", "IRQ", "JAM"] },
+  { name: "L", teams: ["哥伦比亚", "秘鲁", "阿联酋", "埃及"], flags: ["🇨🇴", "🇵🇪", "🇦🇪", "🇪🇬"], codes: ["COL", "PER", "UAE", "EGY"] }
 ];
 
 // ==========================================
@@ -634,11 +728,11 @@ const realStadiums: Record<string, string> = {
 const generatePlayerName = (country: string, num: number): string => {
   const englishFirst = ["杰克", "哈里", "托马斯", "乔治", "詹姆斯", "威廉", "奥利弗", "查理", "阿尔菲", "约书亚", "丹尼尔", "路易斯", "麦克斯"];
   const englishLast = ["史密斯", "琼斯", "威廉姆斯", "布朗", "泰勒", "戴维斯", "威尔逊", "埃文斯", "托马斯", "约翰逊", "罗伯茨", "沃克"];
-  const spanishFirst = ["卢卡斯", "马特奥", "马蒂亚斯", "圣地亚哥", "迭戈", "哈维尔", "安德烈斯", "亚历杭德罗", "卡洛斯", "曼努延尔", "胡安"];
+  const spanishFirst = ["卢卡斯", "马特奥", "马蒂亚斯", "圣地亚哥", "迭戈", "哈维尔", "安德烈斯", "亚历杭德罗", "卡洛斯", "曼努埃尔", "胡安"];
   const spanishLast = ["罗德里格斯", "冈萨雷斯", "戈麦斯", "费尔南德斯", "洛佩斯", "迪亚斯", "马丁内斯", "佩雷斯", "桑切斯", "罗梅罗"];
   const portugueseFirst = ["若昂", "加布里埃尔", "卢卡斯", "佩德罗", "马特乌斯", "古斯塔沃", "拉斐尔", "布鲁诺", "蒂亚戈", "迪奥戈"];
   const portugueseLast = ["席尔瓦", "桑托斯", "奥利维拉", "索萨", "佩雷拉", "科斯塔", "罗德里格斯", "阿尔梅达", "纳西门托", "卡瓦略"];
-  const frenchFirst = ["皮埃尔", "卢卡", "雨果", "马蒂斯", "莱奥", "克莱芒", "安托万", "马克西姆", "阿瑟", "保罗", "托马斯"];
+  const frenchFirst = ["皮埃尔", "雨果", "马蒂斯", "莱奥", "克莱芒", "安托万", "马克西姆", "阿瑟", "保罗", "托马斯"];
   const frenchLast = ["杜波依斯", "洛朗", "马丁", "西蒙", "米歇尔", "勒费弗尔", "勒鲁", "贝特朗", "加尼叶", "弗朗索瓦"];
   const arabFirst = ["阿卜杜拉", "艾哈迈德", "穆罕默德", "阿里", "哈桑", "侯赛因", "奥马尔", "哈立德", "优素福", "费萨尔"];
   const arabLast = ["哈尔比", "多萨里", "加姆迪", "奥泰比", "沙姆里", "卡塔尼", "谢赫里", "萨利赫", "马哈茂德"];
@@ -705,7 +799,7 @@ const generatePlayerName = (country: string, num: number): string => {
 };
 
 // ==========================================
-// 2.3. 身价格式化辅助函数 (转换为百万/亿)
+// 2.3. 身价格式化辅助函数
 // ==========================================
 const formatValueEuro = (value: number): string => {
   if (value >= 100000000) {
@@ -727,21 +821,9 @@ const getTacticalAnalysisFallback = (team: Team): string => {
 };
 
 const getMetaphysicalAnalysisFallback = (team: Team): string => {
-  return `该队今日命格属【${team.metaphysics.element}】，流年卦象显现为【${team.metaphysics.bagua}】。本场比赛宜赛吉时为【${team.metaphysics.favorableHour}】，但切记今日忌冲生肖【${team.metaphysics.clashZodiac}】的球员，首发名单应尽量规避。AI精算爆冷指数为 ${team.metaphysics.upsetChance}%，建议彩民在化忌节点过后结合实时大盘对冲。`;
+  return `该队今日命格属【${team.metaphysics.element}】，流年卦象显现为【${team.metaphysics.bagua}】。本场比赛宜赛吉时为【${team.metaphysics.favorableHour}】，但切记今日忌冲生肖【${team.metaphysics.clashZodiac}】的球员，首发名单应尽量规避。AI精算爆冷指数为 ${team.metaphysics.upsetChance}%，建议在化忌节点过后结合实时大盘量化指数对冲。`;
 };
 
-const elements = ["金", "木", "水", "火", "土"] as const;
-const baguas = ["乾为天", "坤为地", "震为雷", "巽为风", "坎为水", "离为火", "艮为山", "兑为泽"];
-const hours = [
-  "子时 (23:00-01:00)",
-  "寅时 (03:00-05:00)",
-  "辰时 (07:00-09:00)",
-  "午时 (11:00-13:00)",
-  "申时 (15:00-17:00)",
-  "戌时 (19:00-21:00)"
-];
-const zodiacs = ["属鼠", "属牛", "属虎", "属兔", "属龙", "属蛇", "属马", "属羊", "属猴", "属鸡", "属狗", "属猪"];
-const fortuneOptions = ["大吉", "中吉", "平", "凶"] as const;
 const riskLevels = ["低风险", "中度警告", "极高风控"] as const;
 const positionList = ["GK", "DF", "MF", "FW"] as const;
 const clubList = [
@@ -758,120 +840,143 @@ const clubList = [
   "利物浦"
 ];
 
-// 构建全部 12 个小组的初始数据
+// 构建全部 12 个小组的初始数据，完全通过确定性哈希绑定当前系统日期，确保 24H 内刷新完全不跳字
 const generateInitialGroups = (): Group[] => {
+  const dateStr = getTodayDateString();
   const allGroups: Group[] = [];
+
+  // 对静态体验 A 组进行运势固化映射
+  const fixedGroupATeams = groupATeams.map((team) => {
+    const fortuneText = getDeterministicFortune(team.name, dateStr);
+    const meta = getDeterministicMetaphysics(team.name, dateStr, team.metaphysicsWinRate);
+    const roster = team.roster.map((p) => ({
+      ...p,
+      fortune: getDeterministicFortune(p.name, dateStr)
+    }));
+    return {
+      ...team,
+      fortuneText,
+      metaphysics: {
+        ...team.metaphysics,
+        ...meta
+      },
+      roster
+    };
+  });
 
   // 1. 放入 A 组
   allGroups.push({
     id: "group-A",
     name: "A",
-    teams: groupATeams
+    teams: fixedGroupATeams
   });
 
-  // 2. 循环生成 B-L 组
+  // 2. 循环生成 B-L 组 (共 11 个小组 + A 组 = 12 个小组，48 支球队)
   otherGroupConfigs.forEach((config) => {
     const teams: Team[] = config.teams.map((name, index) => {
       const code = config.codes[index];
       const flag = config.flags[index];
       const id = `${config.name.toLowerCase()}-${name}`;
 
-      // 概率与数值生成
-      const aiRate = parseFloat((50 + Math.random() * 40).toFixed(1));
-      const metaRate = parseFloat((50 + Math.random() * 40).toFixed(1));
-      const danger = riskLevels[Math.floor(Math.random() * riskLevels.length)];
-      const fortune = fortuneOptions[Math.floor(Math.random() * fortuneOptions.length)];
+      // 确定性随机 AI 胜率基准
+      const dummyHash = getDeterministicHash(`${name}-base`);
+      const aiRate = parseFloat((50 + (dummyHash % 40)).toFixed(1));
+      const metaRate = parseFloat((50 + ((dummyHash >> 2) % 40)).toFixed(1));
+      const danger = riskLevels[dummyHash % riskLevels.length];
 
-      // 生成 26 人完整大名单
+      // 基于确定的日期获取确定性天命属性 (F5 刷新永不跳字)
+      const fortune = getDeterministicFortune(name, dateStr);
+      const meta = getDeterministicMetaphysics(name, dateStr, metaRate);
+
+      // 生成 26 人大名单
       const roster: Player[] = Array.from({ length: 26 }, (_, i) => {
         const num = i + 1;
         const pos = positionList[i % 4];
-        const age = 20 + Math.floor(Math.random() * 16);
+        const age = 20 + ((dummyHash + num) % 16);
+        const playerName = generatePlayerName(name, num);
 
-        // 生成合理的以欧元为单位的身价数字
+        // 球员身价计算
         let value: number;
         if (i < 3) {
-          // 明星球员身价较高 (1500万至8000万欧元)
-          value = Math.floor((15 + Math.random() * 65) * 1000000);
+          value = Math.floor((15 + ((dummyHash * num) % 65)) * 1000000);
         } else {
-          // 普通球员身价 (50万至1500万欧元)
-          value = Math.floor((0.5 + Math.random() * 14.5) * 1000000);
+          value = Math.floor((0.5 + ((dummyHash * num) % 14)) * 1000000);
         }
 
         return {
           id: `${id}-player-${num}`,
-          name: generatePlayerName(name, num),
+          name: playerName,
           number: num,
           position: pos,
           age,
-          club: clubList[Math.floor(Math.random() * clubList.length)],
-          fortune: fortuneOptions[Math.floor(Math.random() * fortuneOptions.length)],
-          isCaptain: num === 10 || num === 1, // 10号或1号担任队长
+          club: clubList[(dummyHash + num) % clubList.length],
+          fortune: getDeterministicFortune(playerName, dateStr),
+          isCaptain: num === 10 || num === 1,
           value
         };
       });
 
-      // 随机生成近5场战绩
+      // 确定性生成近 5 场战绩
       const opponentNames = ["巴西", "阿根廷", "法国", "英格兰", "西班牙", "德国", "克罗地亚", "荷兰", "比利时", "意大利"];
       const opponentFlags = ["🇧🇷", "🇦🇷", "🇫🇷", "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "🇪🇸", "🇩🇪", "🇭🇷", "🇳🇱", "🇧🇪", "🇮🇹"];
       const results: ("W" | "D" | "L")[] = ["W", "D", "L"];
       const recentForm: RecentMatch[] = Array.from({ length: 5 }, (_, idx) => {
-        const opIdx = Math.floor(Math.random() * opponentNames.length);
-        const res = results[Math.floor(Math.random() * results.length)];
+        const opIdx = (dummyHash + idx) % opponentNames.length;
+        const res = results[(dummyHash * idx) % results.length];
         let score = "1-1";
-        if (res === "W") score = `${2 + Math.floor(Math.random() * 3)}-${Math.floor(Math.random() * 2)}`;
-        if (res === "L") score = `${Math.floor(Math.random() * 2)}-${2 + Math.floor(Math.random() * 3)}`;
+        if (res === "W") score = `${2 + ((dummyHash + idx) % 3)}-${(dummyHash + idx) % 2}`;
+        if (res === "L") score = `${(dummyHash + idx) % 2}-${2 + ((dummyHash + idx) % 3)}`;
         return {
           id: `${id}-r-${idx}`,
           opponent: opponentNames[opIdx],
           opponentFlag: opponentFlags[opIdx],
           result: res,
           score,
-          isHome: Math.random() > 0.5
+          isHome: (dummyHash + idx) % 2 === 0
         };
       });
 
-      // 随机伤病
+      // 确定性伤病生成
       const injuryReasons = ["大腿拉伤", "红牌停赛", "脚踝扭伤", "膝盖积水", "感冒发热"];
       const injuries: Injury[] = [];
-      if (Math.random() > 0.4) {
-        const numInjuries = 1 + Math.floor(Math.random() * 2);
+      if (dummyHash % 10 > 4) {
+        const numInjuries = 1 + (dummyHash % 2);
         for (let i = 0; i < numInjuries; i++) {
-          const pIdx = Math.floor(Math.random() * roster.length);
+          const pIdx = (dummyHash * i) % roster.length;
           injuries.push({
             name: roster[pIdx].name,
             position: roster[pIdx].position,
-            reason: injuryReasons[Math.floor(Math.random() * injuryReasons.length)],
-            severity: (["轻微", "中度", "极高风险"] as const)[Math.floor(Math.random() * 3)]
+            reason: injuryReasons[(dummyHash + i) % injuryReasons.length],
+            severity: (["轻微", "中度", "极高风险"] as const)[(dummyHash + i) % 3]
           });
         }
       }
 
-      // 赔率
-      const homeOdds = parseFloat((1.3 + Math.random() * 2.5).toFixed(2));
-      const drawOdds = parseFloat((3.0 + Math.random() * 1.5).toFixed(2));
-      const awayOdds = parseFloat((2.5 + Math.random() * 5.0).toFixed(2));
+      // 确定性赔率大盘
+      const homeOdds = parseFloat((1.3 + ((dummyHash % 25) / 10)).toFixed(2));
+      const drawOdds = parseFloat((3.0 + ((dummyHash % 15) / 10)).toFixed(2));
+      const awayOdds = parseFloat((2.5 + ((dummyHash % 40) / 10)).toFixed(2));
       const odds: OddsData = {
-        bookmaker: "Bet365",
+        bookmaker: "全球风控精算大盘A",
         homeWin: homeOdds,
         draw: drawOdds,
         awayWin: awayOdds,
-        payout: parseFloat((93 + Math.random() * 4).toFixed(1))
+        payout: parseFloat((93 + (dummyHash % 4)).toFixed(1))
       };
 
-      // 裁判与气象
+      // 确定性裁判与气象
       const referees = ["西蒙·马齐尼亚克", "马尔科·奥利弗", "克莱芒·图尔平", "安东尼·泰勒", "达尼埃莱·奥萨托"];
       const refereeInfo = {
-        name: referees[Math.floor(Math.random() * referees.length)],
-        cardsPerMatch: parseFloat((3.2 + Math.random() * 2.0).toFixed(1)),
-        strictness: (["低", "中", "高"] as const)[Math.floor(Math.random() * 3)]
+        name: referees[dummyHash % referees.length],
+        cardsPerMatch: parseFloat((3.2 + ((dummyHash % 20) / 10)).toFixed(1)),
+        strictness: (["低", "中", "高"] as const)[dummyHash % 3]
       };
 
       const weathers = ["晴朗", "多云", "阴天", "小雨", "大雨", "雷阵雨"];
       const weatherForecast = {
-        temp: `${15 + Math.floor(Math.random() * 18)}°C`,
-        humidity: `${50 + Math.floor(Math.random() * 40)}%`,
-        condition: weathers[Math.floor(Math.random() * weathers.length)]
+        temp: `${15 + (dummyHash % 18)}°C`,
+        humidity: `${50 + (dummyHash % 40)}%`,
+        condition: weathers[dummyHash % weathers.length]
       };
 
       return {
@@ -880,26 +985,19 @@ const generateInitialGroups = (): Group[] => {
         code,
         flag,
         aiWinRate: aiRate,
-        metaphysicsWinRate: metaRate,
+        metaphysicsWinRate: meta.metaphysicsWinRate,
         fortuneText: fortune,
         dangerLevel: danger,
         coach: realCoaches[name] || `阿尔伯特·${name}斯基`,
         stadium: realStadiums[name] || `${name}国家体育场`,
         roster,
         tacticalTags: [
-          { label: "防守硬度", value: 70 + Math.floor(Math.random() * 30) },
-          { label: "前压拦截", value: 65 + Math.floor(Math.random() * 35) },
-          { label: "中路反击", value: 60 + Math.floor(Math.random() * 40) },
-          { label: "定位球攻防", value: 75 + Math.floor(Math.random() * 25) }
+          { label: "防守硬度", value: 70 + (dummyHash % 30) },
+          { label: "前压拦截", value: 65 + ((dummyHash >> 1) % 35) },
+          { label: "中路反击", value: 60 + ((dummyHash >> 2) % 40) },
+          { label: "定位球攻防", value: 75 + ((dummyHash >> 3) % 25) }
         ],
-        metaphysics: {
-          element: elements[Math.floor(Math.random() * elements.length)],
-          bagua: baguas[Math.floor(Math.random() * baguas.length)],
-          favorableHour: hours[Math.floor(Math.random() * hours.length)],
-          clashZodiac: zodiacs[Math.floor(Math.random() * zodiacs.length)],
-          upsetChance: parseFloat((5 + Math.random() * 45).toFixed(1)),
-          metaphysicsWinRate: metaRate
-        },
+        metaphysics: meta,
         recentForm,
         injuries,
         odds,
@@ -928,6 +1026,9 @@ export default function WorldCupHome() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeDrawerTab, setActiveDrawerTab] = useState<"roster" | "tactics" | "meta" | "fixtures">("roster");
 
+  // 展开的球员二级列表详情折叠面板ID
+  const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+
   // 新增：Gemini 预测数据的缓存与加载状态
   interface PredictionData {
     aiWinRate: number;
@@ -948,6 +1049,7 @@ export default function WorldCupHome() {
   const [liveFixtures, setLiveFixtures] = useState<LiveFixture[]>([]);
   const [liveLastUpdated, setLiveLastUpdated] = useState<Date | null>(null);
   const [liveLoading, setLiveLoading] = useState<boolean>(false);
+  
   // 球队历史赛事 State
   const [teamFixtures, setTeamFixtures] = useState<TeamFixture[]>([]);
   const [isTeamFixturesLoading, setIsTeamFixturesLoading] = useState<boolean>(false);
@@ -1041,8 +1143,6 @@ export default function WorldCupHome() {
     : "0.0";
 
   // ── API-Football：自动轮询滚球比分 ──
-  // 服务端已缓存 CACHE_SECONDS 秒，此处前端每 60 秒轮询一次
-  // 若无直播比赛则自动降速至 5 分钟，节省配额
   useEffect(() => {
     const fetchLive = async () => {
       try {
@@ -1059,15 +1159,11 @@ export default function WorldCupHome() {
       }
     };
 
-    // 立即拉一次
     fetchLive();
 
-    // 根据是否有比赛动态决定轮询间隔
-    // 有直播比赛: 60 秒，无直播: 5 分钟
     const getInterval = () => (liveFixtures.length > 0 ? 60_000 : 300_000);
     let timerId = setInterval(fetchLive, getInterval());
 
-    // 每次 liveFixtures 变化时重设 interval
     return () => clearInterval(timerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveFixtures.length]);
@@ -1238,6 +1334,7 @@ export default function WorldCupHome() {
   const handleTeamClick = async (team: Team) => {
     setSelectedTeam(team);
     setActiveDrawerTab("roster");
+    setExpandedPlayerId(null); // 重置折叠面板
     setIsDrawerOpen(true);
     
     // 拉取赛事、赔率、伤停
@@ -1434,7 +1531,6 @@ export default function WorldCupHome() {
           <span>DATA STREAM</span>
         </div>
         <div className="flex-1 overflow-hidden">
-          {/* 双份内容 + animation 0→-50% = 无缝滚动循环 */}
           <div className="flex gap-12 whitespace-nowrap animate-[ticker-scroll_35s_linear_infinite]">
             <span>📈 [AI WIN INDEX] URU: 74.3% (+2.4%) | BRA: 81.2% | ARG: 79.5% | FRA: 78.9%</span>
             <span className="text-[#FF3333]">⚠️ [玄学反煞警告] 今日忌辰：属虎、属猴冲煞极强，防机构强力诱盘</span>
@@ -1452,14 +1548,12 @@ export default function WorldCupHome() {
       {(liveFixtures.length > 0 || liveLoading) && (
         <div className="w-full bg-[#0A0A10] border-b border-[#FF3333]/20 py-2 px-4 relative z-20">
           <div className="max-w-7xl mx-auto flex items-center gap-3 overflow-x-auto scrollbar-none">
-            {/* 左侧标识 */}
             <div className="flex items-center gap-1.5 shrink-0 text-[#FF3333] font-bold text-[11px] font-mono pr-3 border-r border-[#FF3333]/20">
               <Radio className="w-3 h-3 animate-pulse" />
               <span>LIVE</span>
             </div>
 
             {liveLoading && liveFixtures.length === 0 ? (
-              /* 骨架屏 */
               <div className="flex gap-3">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="flex items-center gap-2 bg-[#13131A] border border-[#252535] rounded-lg px-3 py-1.5 animate-pulse">
@@ -1509,7 +1603,6 @@ export default function WorldCupHome() {
               </div>
             )}
 
-            {/* 右侧最后更新时间 */}
             {liveLastUpdated && (
               <div className="ml-auto shrink-0 text-[9px] text-[#888899] font-mono flex items-center gap-1">
                 <Timer className="w-2.5 h-2.5" />
@@ -1524,13 +1617,11 @@ export default function WorldCupHome() {
       <header className="p-4 md:p-6 max-w-7xl mx-auto w-full relative z-10">
         <div className="bg-[#13131A] border border-[#1E1E2E] rounded-xl p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
           
-          {/* 背景极客点阵微光特效 */}
           <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
             backgroundImage: "radial-gradient(#00FF66 1px, transparent 1px)",
             backgroundSize: "20px 20px"
           }} />
 
-          {/* 大盘指标与动画 */}
           <div className="flex items-center gap-4 relative z-10">
             <div className="w-12 h-12 rounded-lg bg-[#00FF66]/10 border border-[#00FF66]/30 flex items-center justify-center text-[#00FF66] shrink-0">
               <Cpu className="w-6 h-6 animate-pulse" />
@@ -1547,7 +1638,6 @@ export default function WorldCupHome() {
             </div>
           </div>
 
-          {/* 实时对冲按钮与网页管理端入口 */}
           <div className="flex items-center gap-3 relative z-10 self-start md:self-auto">
             <button
               onClick={() => setIsAdminPanelOpen(true)}
@@ -1569,36 +1659,36 @@ export default function WorldCupHome() {
         </div>
       </header>
 
-      {/* ── 中间主体：12小组 Bento Grid ── */}
+      {/* ── 中间主体：12小组 Bento Grid (移动端响应式拼版优化) ── */}
       <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full pb-20 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {groups.map((group) => (
             <div
               key={group.id}
               className="bg-[#13131A] border border-[#1E1E2E] rounded-xl overflow-hidden hover:border-[#00FF66] transition-all duration-300 shadow-xl group/card flex flex-col justify-between"
             >
               {/* 小组标题栏 */}
-              <div className="p-4 border-b border-[#1E1E2E] bg-[#171722] flex justify-between items-center">
-                <span className="font-mono text-sm text-[#888899]">GROUP</span>
-                <span className="text-xl font-black text-white group-hover/card:text-[#00FF66] transition-colors">
+              <div className="p-3.5 border-b border-[#1E1E2E] bg-[#171722] flex justify-between items-center">
+                <span className="font-mono text-xs text-[#888899]">GROUP</span>
+                <span className="text-lg font-black text-white group-hover/card:text-[#00FF66] transition-colors">
                   {group.name} 组
                 </span>
               </div>
 
               {/* 球队列表 */}
-              <div className="p-4 space-y-3 flex-grow">
+              <div className="p-3 space-y-2.5 flex-grow">
                 {group.teams.map((team) => (
                   <div
                     key={team.id}
                     onClick={() => handleTeamClick(team)}
-                    className="p-3 bg-[#1C1C26] rounded-lg border border-[#252535] hover:bg-[#252535] hover:border-[#00FF66]/40 cursor-pointer transition-all duration-200 flex items-center justify-between"
+                    className="p-2.5 bg-[#1C1C26] rounded-lg border border-[#252535] hover:bg-[#252535] hover:border-[#00FF66]/40 cursor-pointer transition-all duration-200 flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xl">{team.flag}</span>
-                      <div>
-                        <div className="font-semibold text-sm text-white flex items-center gap-1.5 flex-wrap">
-                          {team.name}
-                          <span className="text-[10px] text-[#888899] font-mono">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl shrink-0">{team.flag}</span>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-xs text-white flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate max-w-[80px]">{team.name}</span>
+                          <span className="text-[9px] text-[#888899] font-mono shrink-0">
                             {team.code}
                           </span>
                           {/* 🔴 LIVE 实时角标 */}
@@ -1607,24 +1697,24 @@ export default function WorldCupHome() {
                             const isLive = lf && ["1H","2H","HT","ET","P","PEN","BT"].includes(lf.statusShort);
                             if (!isLive || !lf) return null;
                             return (
-                              <span className="inline-flex items-center gap-0.5 text-[8px] font-black font-mono px-1.5 py-0.5 bg-[#FF3333]/10 text-[#FF3333] rounded border border-[#FF3333]/30 animate-pulse">
+                              <span className="inline-flex items-center gap-0.5 text-[8px] font-black font-mono px-1 py-0.2 bg-[#FF3333]/15 text-[#FF3333] rounded border border-[#FF3333]/30 animate-pulse">
                                 🔴 LIVE{lf.minute ? ` ${lf.minute}'` : ""}
                               </span>
                             );
                           })()}
                         </div>
-                        <div className="text-[10px] text-[#888899] mt-0.5 font-mono flex items-center gap-2">
-                          <span>AI: <span className="text-[#00FF66]">{team.aiWinRate}%</span></span>
-                          <span>玄学: <span className="text-[#00FF66]">{team.metaphysicsWinRate}%</span></span>
+                        <div className="text-[9px] text-[#888899] mt-0.5 font-mono flex items-center gap-1.5">
+                          <span>AI:<span className="text-[#00FF66] font-bold">{team.aiWinRate}%</span></span>
+                          <span>玄学:<span className="text-[#00FF66] font-bold">{team.metaphysicsWinRate}%</span></span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1 font-mono">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${getFortuneBadgeColor(team.fortuneText)}`}>
+                    <div className="flex flex-col items-end gap-1 font-mono shrink-0">
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold scale-90 origin-right ${getFortuneBadgeColor(team.fortuneText)}`}>
                         {team.fortuneText}
                       </span>
-                      <span className={`text-[8px] px-1 rounded scale-90 ${getDangerLevelColor(team.dangerLevel)}`}>
+                      <span className={`text-[8px] px-1 rounded scale-75 origin-right ${getDangerLevelColor(team.dangerLevel)}`}>
                         {team.dangerLevel}
                       </span>
                     </div>
@@ -1633,7 +1723,7 @@ export default function WorldCupHome() {
               </div>
 
               {/* 小组快速底栏 */}
-              <div className="px-4 py-2 bg-[#171722] border-t border-[#1E1E2E] text-[10px] text-[#888899] font-mono flex justify-between">
+              <div className="px-3.5 py-1.5 bg-[#171722] border-t border-[#1E1E2E] text-[9px] text-[#888899] font-mono flex justify-between">
                 <span>4支铁骑对决</span>
                 <span className="text-[#00FF66] animate-pulse">● 数据源已校准</span>
               </div>
@@ -1645,7 +1735,6 @@ export default function WorldCupHome() {
       {/* ── 核心交互：抽屉 (Drawer) ── */}
       {isDrawerOpen && selectedTeam && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          {/* 暗色遮罩背景 */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsDrawerOpen(false)}
@@ -1678,79 +1767,39 @@ export default function WorldCupHome() {
               </button>
             </div>
 
-            {/* 快捷对冲雷盘 & 今日宏观玄学指标 */}
-            <div className="p-5 bg-gradient-to-br from-[#1C1C26] to-[#13131A] border-b border-[#1E1E2E] grid grid-cols-3 gap-4">
-              <div className="bg-[#13131A]/60 p-3 rounded-lg border border-[#252535] text-center">
-                <div className="text-xs text-[#888899] mb-1 flex items-center justify-center gap-1">
-                  <Cpu className="w-3.5 h-3.5 text-[#00FF66]" />
-                  <span>AI 胜率预测</span>
-                </div>
-                <div className="text-2xl font-black text-[#00FF66] font-mono">
-                  {isPredictLoading ? (
-                    <span className="text-xs font-normal text-[#888899] animate-pulse">精算中...</span>
-                  ) : (
-                    `${selectedTeam.aiWinRate}%`
-                  )}
-                </div>
-              </div>
-              <div className="bg-[#13131A]/60 p-3 rounded-lg border border-[#252535] text-center">
-                <div className="text-xs text-[#888899] mb-1 flex items-center justify-center gap-1">
-                  <Compass className="w-3.5 h-3.5 text-[#00FF66]" />
-                  <span>玄学能量值</span>
-                </div>
-                <div className="text-2xl font-black text-[#00FF66] font-mono">
-                  {isPredictLoading ? (
-                    <span className="text-xs font-normal text-[#888899] animate-pulse">推演中...</span>
-                  ) : (
-                    `${selectedTeam.metaphysicsWinRate}%`
-                  )}
-                </div>
-              </div>
-              <div className="bg-[#13131A]/60 p-3 rounded-lg border border-[#252535] text-center">
-                <div className="text-xs text-[#888899] mb-1 flex items-center justify-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                  <span>爆冷概率</span>
-                </div>
-                <div className="text-2xl font-black text-[#FF3333] font-mono">
-                  {isPredictLoading ? (
-                    <span className="text-xs font-normal text-[#888899] animate-pulse">排煞中...</span>
-                  ) : (
-                    `${selectedTeam.metaphysics.upsetChance}%`
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* 抽屉导航选项卡 */}
-            <div className="flex border-b border-[#1E1E2E] bg-[#171722] text-xs">
+            {/* 四 Tab 头部标签，压缩字号确保紧凑拼版 */}
+            <div className="flex bg-[#171722] border-b border-[#1E1E2E] text-xs font-mono">
               <button
-                onClick={() => setActiveDrawerTab("roster")}
-                className={`flex-1 py-3 text-center font-medium border-b-2 transition-all ${
+                onClick={() => { setActiveDrawerTab("roster"); setExpandedPlayerId(null); }}
+                className={`flex-1 py-3 text-center font-medium border-b-2 transition-all flex items-center justify-center gap-1 ${
                   activeDrawerTab === "roster"
                     ? "border-[#00FF66] text-[#00FF66] bg-[#00FF66]/5"
                     : "border-transparent text-[#888899] hover:text-white"
                 }`}
               >
-                26人名单
+                <Users className="w-3.5 h-3.5" />
+                大名单
               </button>
               <button
                 onClick={() => setActiveDrawerTab("tactics")}
-                className={`flex-1 py-3 text-center font-medium border-b-2 transition-all ${
+                className={`flex-1 py-3 text-center font-medium border-b-2 transition-all flex items-center justify-center gap-1 ${
                   activeDrawerTab === "tactics"
                     ? "border-[#00FF66] text-[#00FF66] bg-[#00FF66]/5"
                     : "border-transparent text-[#888899] hover:text-white"
                 }`}
               >
-                战术分析
+                <Shield className="w-3.5 h-3.5" />
+                战术数据
               </button>
               <button
                 onClick={() => setActiveDrawerTab("meta")}
-                className={`flex-1 py-3 text-center font-medium border-b-2 transition-all ${
+                className={`flex-1 py-3 text-center font-medium border-b-2 transition-all flex items-center justify-center gap-1 ${
                   activeDrawerTab === "meta"
                     ? "border-[#00FF66] text-[#00FF66] bg-[#00FF66]/5"
                     : "border-transparent text-[#888899] hover:text-white"
                 }`}
               >
+                <Compass className="w-3.5 h-3.5" />
                 八卦命格
               </button>
               <button
@@ -1769,7 +1818,7 @@ export default function WorldCupHome() {
             {/* 抽屉滚动内容区 */}
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
               
-              {/* TAB 1: 26人大名单 */}
+              {/* TAB 1: 26人大名单 + 折叠面板点击二级精算指标（Bug 2 修复） */}
               {activeDrawerTab === "roster" && (
                 <div className="space-y-4">
                   {/* 红色伤病停赛警报栏 */}
@@ -1814,46 +1863,81 @@ export default function WorldCupHome() {
                   ) : null}
 
                   <div className="flex justify-between items-center text-xs text-[#888899] pb-2 border-b border-[#1E1E2E]">
-                    <span>核心主将 (含今日运势)</span>
+                    <span>核心主将 (点击查看二级量化精算)</span>
                     <span>身价 (欧元)</span>
                   </div>
+                  
                   <div className="space-y-2">
-                    {selectedTeam.roster.map((player) => (
-                      <div
-                        key={player.id}
-                        className="p-3 bg-[#1C1C26] rounded-lg border border-[#252535] flex items-center justify-between hover:border-[#00FF66]/20 transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="w-6 h-6 rounded-full bg-[#13131A] flex items-center justify-center text-xs font-mono font-bold text-[#888899]">
-                            {player.number}
-                          </span>
-                          <div>
-                            <div className="text-sm font-semibold flex items-center gap-1.5">
-                              {player.name}
-                              {player.isCaptain && (
-                                <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.2 rounded border border-amber-500/20">
-                                  C
-                                </span>
-                              )}
-                              <span className="text-[10px] text-[#888899] bg-[#13131A] px-1 py-0.2 rounded font-mono">
-                                {player.position}
+                    {selectedTeam.roster.map((player) => {
+                      const isExpanded = expandedPlayerId === player.id;
+                      return (
+                        <div
+                          key={player.id}
+                          className="p-3 bg-[#1C1C26] rounded-lg border border-[#252535] hover:border-[#00FF66]/20 transition-all flex flex-col"
+                        >
+                          <div
+                            onClick={() => setExpandedPlayerId(isExpanded ? null : player.id)}
+                            className="flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="w-6 h-6 rounded-full bg-[#13131A] flex items-center justify-center text-xs font-mono font-bold text-[#888899] shrink-0">
+                                {player.number}
                               </span>
+                              <div>
+                                <div className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
+                                  <span>{player.name}</span>
+                                  {player.isCaptain && (
+                                    <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.2 rounded border border-amber-500/20">
+                                      C
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-[#888899] bg-[#13131A] px-1 py-0.2 rounded font-mono">
+                                    {player.position}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-[#888899] mt-0.5">
+                                  {player.age}岁 · {player.club}
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-[11px] text-[#888899] mt-0.5">
-                              {player.age}岁 · {player.club}
+
+                            {/* 运势标签、身价及折叠箭头 */}
+                            <div className="flex items-center gap-2 font-mono shrink-0">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${getFortuneBadgeColor(player.fortune)}`}>
+                                🔮运势:{player.fortune}
+                              </span>
+                              <span className="text-xs text-white/90 mr-1">{formatValueEuro(player.value)}</span>
+                              {isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5 text-zinc-400" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                              )}
                             </div>
                           </div>
-                        </div>
 
-                        {/* 运势标鉴及身价 */}
-                        <div className="flex items-center gap-3 font-mono">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${getFortuneBadgeColor(player.fortune)}`}>
-                            🔮运势:{player.fortune}
-                          </span>
-                          <span className="text-xs text-white/90">{formatValueEuro(player.value)}</span>
+                          {/* 展开展示的球员 3 项真实确定性精算数据详情区 */}
+                          {isExpanded && (() => {
+                            const stats = getPlayerStats(player, getTodayDateString());
+                            return (
+                              <div className="mt-2.5 p-3 bg-[#0D0D11] border border-[#00FF66]/20 rounded-md font-mono text-[10px] space-y-1.5 animate-[slide-down_0.2s_ease-out]">
+                                <div className="flex justify-between items-center text-[#888899]">
+                                  <span>📊 赛前数据状态</span>
+                                  <span className="text-[#00FF66] font-bold">[{stats.condition}%]</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[#888899]">
+                                  <span>🎯 核心战术执行力</span>
+                                  <span className="text-[#00FF66] font-bold">[{stats.tacticalFit}%]</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[#888899]">
+                                  <span>⚡️ 场上流动性速率</span>
+                                  <span className="text-amber-400 font-bold">[{stats.speed}]</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1986,7 +2070,6 @@ export default function WorldCupHome() {
                   </div>
 
                   <div className="bg-[#1C1C26] p-4 rounded-lg border border-[#252535] space-y-3 relative overflow-hidden">
-                    {/* 微光风效 */}
                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
                     <div className="flex justify-between items-center relative z-10">
                       <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -2124,39 +2207,27 @@ export default function WorldCupHome() {
                       <CalendarDays className="w-3.5 h-3.5 text-[#FF3333]" />
                       <span>世界杯赛事记录（API-Football 实时）</span>
                     </div>
-                    {/* 重新拉取按钮 */}
-                    <button
-                      onClick={() => selectedTeam && fetchTeamFixtures(selectedTeam.id)}
-                      disabled={isTeamFixturesLoading}
-                      className="p-1.5 rounded bg-[#1C1C26] border border-[#252535] hover:border-[#00FF66]/30 text-[#888899] hover:text-[#00FF66] transition-all disabled:opacity-40"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isTeamFixturesLoading ? "animate-spin" : ""}`} />
-                    </button>
                   </div>
 
-                  {/* 错误提示 */}
-                  {teamFixturesError && (
-                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400 font-mono">
-                      ⚠️ {teamFixturesError}
-                    </div>
-                  )}
-
-                  {/* 加载骨架屏 */}
-                  {isTeamFixturesLoading && (
-                    <div className="space-y-2">
-                      {[1,2,3,4,5].map((i) => (
-                        <div key={i} className="h-14 bg-[#1C1C26] rounded-lg border border-[#252535] animate-pulse" />
+                  {isTeamFixturesLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="h-16 bg-[#1C1C26] border border-[#252535] rounded-lg animate-pulse" />
                       ))}
                     </div>
-                  )}
-
-                  {/* 赛事列表 */}
-                  {!isTeamFixturesLoading && teamFixtures.length > 0 && (
-                    <div className="space-y-2">
+                  ) : teamFixturesError ? (
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 text-[#FF3333] rounded-lg text-xs font-mono">
+                      ⚠️ {teamFixturesError}
+                      <p className="mt-1 opacity-70">
+                        提示：我们将自动启用模拟量化对冲预测大盘
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
                       {teamFixtures.map((f) => {
-                        const isFinished = f.statusShort === "FT" || f.statusShort === "AET";
-                        const isLive = ["1H","2H","HT","ET","P","PEN","BT"].includes(f.statusShort);
                         const matchDate = new Date(f.date);
+                        const isFinished = f.statusShort === "FT" || f.statusShort === "AET" || f.statusShort === "PEN";
+                        const isLive = ["1H", "2H", "HT", "ET", "P", "PEN", "BT"].includes(f.statusShort);
                         return (
                           <div
                             key={f.fixtureId}
@@ -2212,7 +2283,7 @@ export default function WorldCupHome() {
                     </div>
                   )}
 
-                  {/* 空状态（无数据且无错误） */}
+                  {/* 空状态 */}
                   {!isTeamFixturesLoading && teamFixtures.length === 0 && !teamFixturesError && (
                     <div className="py-12 text-center text-[#888899] text-xs font-mono">
                       <CalendarDays className="w-8 h-8 mx-auto mb-3 opacity-30" />
@@ -2225,7 +2296,7 @@ export default function WorldCupHome() {
 
             </div>
 
-            {/* 抽屉底部广告埋点与引流闪烁按钮 */}
+            {/* 抽屉底部引流闪烁按钮 */}
             <div className="p-5 border-t border-[#1E1E2E] bg-[#171722] space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#888899]">🔮今日局势运势预测：</span>
@@ -2319,127 +2390,127 @@ export default function WorldCupHome() {
                 </div>
               ) : (
                 <div className="space-y-6">
-              {/* 选择需要修改的球队 */}
-              <div className="space-y-2">
-                <label className="text-xs text-[#888899] font-mono">STEP 1: 选择需要修改的国家队</label>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                  {groups.flatMap((g) => g.teams).map((team) => (
-                    <button
-                      key={team.id}
-                      onClick={() => startEditing(team)}
-                      className={`p-2 text-xs rounded border transition-all truncate ${
-                        editingTeam?.id === team.id
-                          ? "border-[#00FF66] bg-[#00FF66]/10 text-white"
-                          : "border-[#252535] bg-[#1C1C26] text-[#888899] hover:text-white"
-                      }`}
-                    >
-                      {team.flag} {team.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 修改具体表单字段 */}
-              {editingTeam ? (
-                <div className="space-y-4 border-t border-[#1E1E2E] pt-4">
-                  <div className="text-xs text-[#888899] font-mono">
-                    STEP 2: 修改 [{editingTeam.flag} {editingTeam.name}] 的实时数据及玄学参数
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* AI 胜率 */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-[#888899]">AI 胜率预测 (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={editAiWinRate}
-                        onChange={(e) => setEditAiWinRate(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
-                        className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
-                      />
-                    </div>
-
-                    {/* 玄学胜率 */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-[#888899]">玄学胜率 (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={editMetaWinRate}
-                        onChange={(e) => setEditMetaWinRate(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
-                        className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
-                      />
-                    </div>
-
-                    {/* 今日大运势 */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-[#888899]">今日大运势</label>
-                      <select
-                        value={editFortune}
-                        onChange={(e) => setEditFortune(e.target.value as Team["fortuneText"])}
-                        className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
-                      >
-                        <option value="大吉">大吉</option>
-                        <option value="中吉">中吉</option>
-                        <option value="平">平</option>
-                        <option value="凶">凶</option>
-                      </select>
-                    </div>
-
-                    {/* 风控等级 */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-[#888899]">大盘风控评级</label>
-                      <select
-                        value={editDangerLevel}
-                        onChange={(e) => setEditDangerLevel(e.target.value as Team["dangerLevel"])}
-                        className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
-                      >
-                        <option value="低风险">低风险</option>
-                        <option value="中度警告">中度警告</option>
-                        <option value="极高风控">极高风控</option>
-                      </select>
-                    </div>
-
-                    {/* 爆冷指数 */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-[#888899]">爆冷几率指数 (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={editUpsetChance}
-                        onChange={(e) => setEditUpsetChance(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
-                        className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
-                      />
-                    </div>
-
-                    {/* 主教练 */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-[#888899]">主教练名字</label>
-                      <input
-                        type="text"
-                        value={editCoach}
-                        onChange={(e) => setEditCoach(e.target.value)}
-                        className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
-                      />
+                  {/* 选择需要修改的球队 */}
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#888899] font-mono">STEP 1: 选择需要修改的国家队</label>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                      {groups.flatMap((g) => g.teams).map((team) => (
+                        <button
+                          key={team.id}
+                          onClick={() => startEditing(team)}
+                          className={`p-2 text-xs rounded border transition-all truncate ${
+                            editingTeam?.id === team.id
+                              ? "border-[#00FF66] bg-[#00FF66]/10 text-white"
+                              : "border-[#252535] bg-[#1C1C26] text-[#888899] hover:text-white"
+                          }`}
+                        >
+                          {team.flag} {team.name}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="p-8 border border-dashed border-[#252535] text-center text-xs text-[#888899] rounded">
-                  请在上面点击想要修改的国家队，随后可在此编辑实时大盘数据
-                </div>
-              )}
+
+                  {/* 修改具体表单字段 */}
+                  {editingTeam ? (
+                    <div className="space-y-4 border-t border-[#1E1E2E] pt-4">
+                      <div className="text-xs text-[#888899] font-mono">
+                        STEP 2: 修改 [{editingTeam.flag} {editingTeam.name}] 的实时数据及玄学参数
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* AI 胜率 */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-[#888899]">AI 胜率预测 (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={editAiWinRate}
+                            onChange={(e) => setEditAiWinRate(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                            className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
+                          />
+                        </div>
+
+                        {/* 玄学胜率 */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-[#888899]">玄学胜率 (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={editMetaWinRate}
+                            onChange={(e) => setEditMetaWinRate(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                            className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
+                          />
+                        </div>
+
+                        {/* 今日大运势 */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-[#888899]">今日大运势</label>
+                          <select
+                            value={editFortune}
+                            onChange={(e) => setEditFortune(e.target.value as Team["fortuneText"])}
+                            className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
+                          >
+                            <option value="大吉">大吉</option>
+                            <option value="中吉">中吉</option>
+                            <option value="平">平</option>
+                            <option value="凶">凶</option>
+                          </select>
+                        </div>
+
+                        {/* 风控等级 */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-[#888899]">大盘风控评级</label>
+                          <select
+                            value={editDangerLevel}
+                            onChange={(e) => setEditDangerLevel(e.target.value as Team["dangerLevel"])}
+                            className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
+                          >
+                            <option value="低风险">低风险</option>
+                            <option value="中度警告">中度警告</option>
+                            <option value="极高风控">极高风控</option>
+                          </select>
+                        </div>
+
+                        {/* 爆冷指数 */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-[#888899]">爆冷几率指数 (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={editUpsetChance}
+                            onChange={(e) => setEditUpsetChance(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                            className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
+                          />
+                        </div>
+
+                        {/* 主教练 */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-[#888899]">主教练名字</label>
+                          <input
+                            type="text"
+                            value={editCoach}
+                            onChange={(e) => setEditCoach(e.target.value)}
+                            className="w-full bg-[#1C1C26] border border-[#252535] rounded p-2 text-sm text-white focus:border-[#00FF66] outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 border border-dashed border-[#252535] text-center text-xs text-[#888899] rounded">
+                      请在上面点击想要修改的国家队，随后可在此编辑实时大盘数据
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* 编辑保存底栏（PIN 验证通过后才显示）*/}
+            {/* 编辑保存底栏 */}
             {adminPinVerified && (
               <div className="p-5 border-t border-[#1E1E2E] bg-[#171722] flex justify-end gap-3">
                 <button
