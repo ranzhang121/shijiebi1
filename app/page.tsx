@@ -953,6 +953,66 @@ export default function WorldCupHome() {
   const [isTeamFixturesLoading, setIsTeamFixturesLoading] = useState<boolean>(false);
   const [teamFixturesError, setTeamFixturesError] = useState<string | null>(null);
 
+  // ─────────────────────────────────────────────
+  // 新增 API 数据状态与节流/防刷控制
+  // ─────────────────────────────────────────────
+  const [apiInjuries, setApiInjuries] = useState<any[]>([]);
+  const [isInjuriesLoading, setIsInjuriesLoading] = useState<boolean>(false);
+  
+  const [liveOdds, setLiveOdds] = useState<{
+    data_source: string;
+    main_success_factor: number;
+    draw_factor: number;
+    away_success_factor: number;
+    theoretical_payout: number;
+  } | null>(null);
+  const [isOddsLoading, setIsOddsLoading] = useState<boolean>(false);
+
+  // Gemini 在线生成的战术与玄学结果
+  const [geminiTactics, setGeminiTactics] = useState<Record<string, string>>({});
+  const [isGeminiTacticsLoading, setIsGeminiTacticsLoading] = useState<boolean>(false);
+  const [geminiTacticsCooldown, setGeminiTacticsCooldown] = useState<number>(0);
+
+  const [geminiMeta, setGeminiMeta] = useState<Record<string, string>>({});
+  const [isGeminiMetaLoading, setIsGeminiMetaLoading] = useState<boolean>(false);
+  const [geminiMetaCooldown, setGeminiMetaCooldown] = useState<number>(0);
+
+  // 渠道追踪系统
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const ref = searchParams.get("ref");
+      if (ref) {
+        localStorage.setItem("affiliate_agent", ref);
+      }
+    }
+  }, []);
+
+  const getRedirectUrl = () => {
+    if (typeof window !== "undefined") {
+      const agent = localStorage.getItem("affiliate_agent");
+      if (agent) {
+        return `${REDIRECT_URL}?from=${encodeURIComponent(agent)}`;
+      }
+    }
+    return REDIRECT_URL;
+  };
+
+  // 倒计时冷却控制
+  useEffect(() => {
+    if (geminiTacticsCooldown > 0) {
+      const timer = setTimeout(() => setGeminiTacticsCooldown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [geminiTacticsCooldown]);
+
+  useEffect(() => {
+    if (geminiMetaCooldown > 0) {
+      const timer = setTimeout(() => setGeminiMetaCooldown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [geminiMetaCooldown]);
+
   // 数据后台修改面板 State (直接在网页上模拟管理员修改)
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
@@ -987,7 +1047,7 @@ export default function WorldCupHome() {
     const fetchLive = async () => {
       try {
         setLiveLoading(true);
-        const res = await fetch("/api/football/live");
+        const res = await fetch("/api/football?type=live");
         if (!res.ok) return;
         const data = await res.json();
         setLiveFixtures(data.fixtures ?? []);
@@ -1039,6 +1099,120 @@ export default function WorldCupHome() {
     }
   };
 
+  // ── 获取即时风控大盘指数 (Odds) ──
+  const fetchLiveOdds = async (teamId: string, teamName: string) => {
+    setIsOddsLoading(true);
+    setLiveOdds(null);
+    try {
+      const lf = getTeamLiveFixture(teamName);
+      const fixtureId = lf?.fixtureId || (TEAM_API_ID_MAP[teamId] ? 100000 + TEAM_API_ID_MAP[teamId] : 99999);
+      
+      const res = await fetch(`/api/football?type=odds&fixtureId=${fixtureId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.odds) {
+          setLiveOdds(data.odds);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch odds:", e);
+    } finally {
+      setIsOddsLoading(false);
+    }
+  };
+
+  // ── 获取即时风控伤退警报 ──
+  const fetchLiveInjuries = async (teamId: string, teamName: string) => {
+    setIsInjuriesLoading(true);
+    setApiInjuries([]);
+    try {
+      const apiId = TEAM_API_ID_MAP[teamId];
+      let query = "";
+      if (apiId) {
+        query = `teamId=${apiId}`;
+      } else {
+        const lf = getTeamLiveFixture(teamName);
+        if (lf) query = `fixtureId=${lf.fixtureId}`;
+      }
+      
+      if (query) {
+        const res = await fetch(`/api/football?type=injuries&${query}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.injuries) {
+            setApiInjuries(data.injuries);
+            return;
+          }
+        }
+      }
+      
+      // 降级回退
+      const t = groups.flatMap(g => g.teams).find(item => item.id === teamId);
+      if (t) {
+        setApiInjuries(t.injuries.map(i => ({
+          player: i.name,
+          position: i.position === "GK" ? "门将" : i.position === "DF" ? "后卫" : i.position === "MF" ? "中场" : "前锋",
+          reason: i.reason,
+          severity: i.severity
+        })));
+      }
+    } catch (e) {
+      console.warn("Failed to fetch injuries:", e);
+    } finally {
+      setIsInjuriesLoading(false);
+    }
+  };
+
+  // ── 激活量化精算分析（Gemini 战术） ──
+  const handleTriggerTacticsAi = async (team: Team) => {
+    if (geminiTacticsCooldown > 0 || isGeminiTacticsLoading) return;
+    
+    setIsGeminiTacticsLoading(true);
+    setGeminiTacticsCooldown(3); // 3秒防刷
+    try {
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "tactics", teamData: team })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.text) {
+        setGeminiTactics(prev => ({ ...prev, [team.id]: data.text }));
+      }
+    } catch (e) {
+      console.warn("Tactics Gemini AI failed:", e);
+      setGeminiTactics(prev => ({ ...prev, [team.id]: "系统网络拥堵，未能成功激活实时对冲精算。已启用本地高频算力方案。" }));
+    } finally {
+      setIsGeminiTacticsLoading(false);
+    }
+  };
+
+  // ── 观星占卜流时化忌（Gemini 玄学） ──
+  const handleTriggerMetaAi = async (team: Team) => {
+    if (geminiMetaCooldown > 0 || isGeminiMetaLoading) return;
+    
+    setIsGeminiMetaLoading(true);
+    setGeminiMetaCooldown(3); // 3秒防刷
+    try {
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "metaphysics", teamData: team })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.text) {
+        setGeminiMeta(prev => ({ ...prev, [team.id]: data.text }));
+      }
+    } catch (e) {
+      console.warn("Metaphysics Gemini AI failed:", e);
+      setGeminiMeta(prev => ({ ...prev, [team.id]: "流年流月相冲，天机盘受阻，已启用九星命格离线精算。" }));
+    } finally {
+      setIsGeminiMetaLoading(false);
+    }
+  };
+
   // ── 辅助：根据队名英文匹配 Live 比赛 ──
   const getTeamLiveFixture = (teamName: string): LiveFixture | undefined =>
     liveFixtures.find(
@@ -1065,8 +1239,11 @@ export default function WorldCupHome() {
     setSelectedTeam(team);
     setActiveDrawerTab("roster");
     setIsDrawerOpen(true);
-    // 同时拉取该队真实赛事记录
+    
+    // 拉取赛事、赔率、伤停
     fetchTeamFixtures(team.id);
+    fetchLiveOdds(team.id, team.name);
+    fetchLiveInjuries(team.id, team.name);
 
     if (predictions[team.id]) {
       return;
@@ -1380,7 +1557,7 @@ export default function WorldCupHome() {
               <span>数据修改终端</span>
             </button>
             <a
-              href={REDIRECT_URL}
+              href={getRedirectUrl()}
               target="_blank"
               rel="noopener noreferrer"
               className="px-5 py-2.5 bg-[#00FF66] text-[#0D0D11] rounded-lg font-bold text-xs md:text-sm hover:scale-110 active:scale-95 transition-all duration-300 shadow-[0_0_15px_rgba(0,255,102,0.3)] flex items-center gap-2 shrink-0 animate-[breathe-glow_2s_infinite]"
@@ -1596,7 +1773,18 @@ export default function WorldCupHome() {
               {activeDrawerTab === "roster" && (
                 <div className="space-y-4">
                   {/* 红色伤病停赛警报栏 */}
-                  {selectedTeam.injuries && selectedTeam.injuries.length > 0 && (
+                  {isInjuriesLoading ? (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 space-y-2 relative overflow-hidden animate-pulse">
+                      <div className="flex items-center gap-1.5 text-xs text-[#FF3333] font-bold">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>正在接入即时风控伤退警报...</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-red-500/25 rounded w-3/4" />
+                        <div className="h-3 bg-red-500/25 rounded w-1/2" />
+                      </div>
+                    </div>
+                  ) : apiInjuries && apiInjuries.length > 0 ? (
                     <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 space-y-2 relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-1 opacity-10">
                         <AlertTriangle className="w-16 h-16 text-red-500" />
@@ -1606,14 +1794,14 @@ export default function WorldCupHome() {
                         <span>⚠️ 主力核心伤病停赛警报</span>
                       </div>
                       <div className="space-y-1">
-                        {selectedTeam.injuries.map((injury, idx) => (
+                        {apiInjuries.map((injury, idx) => (
                           <div key={idx} className="flex justify-between items-center text-[11px] font-mono">
-                            <span className="text-white/90">{injury.name} ({injury.position})</span>
+                            <span className="text-white/90">{injury.player} ({injury.position})</span>
                             <div className="flex gap-2 items-center">
                               <span className="text-[#888899]">{injury.reason}</span>
                               <span className={`px-1 rounded text-[9px] ${
-                                injury.severity === "极高风险" ? "bg-red-500/20 text-red-400 border border-red-500/20" :
-                                injury.severity === "中度" ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
+                                injury.severity.includes("重") || injury.severity.includes("极高") ? "bg-red-500/20 text-red-400 border border-red-500/20" :
+                                injury.severity.includes("中") ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
                                 "bg-zinc-500/20 text-zinc-400 border border-zinc-500/20"
                               }`}>
                                 {injury.severity}
@@ -1623,7 +1811,7 @@ export default function WorldCupHome() {
                         ))}
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
                   <div className="flex justify-between items-center text-xs text-[#888899] pb-2 border-b border-[#1E1E2E]">
                     <span>核心主将 (含今日运势)</span>
@@ -1726,32 +1914,52 @@ export default function WorldCupHome() {
                     </div>
                   </div>
 
-                  {/* 即时赔率大盘 */}
-                  <div className="bg-[#1C1C26] p-4 rounded-lg border border-[#252535] space-y-3 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
-                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                      <Activity className="w-4 h-4 text-[#00FF66]" />
-                      <span>即时指数对冲大盘 ({selectedTeam.odds.bookmaker})</span>
-                    </h3>
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                      <div className="p-2 bg-[#13131A] rounded border border-[#252535] font-mono">
-                        <span className="text-[10px] text-[#888899] block mb-0.5">主胜</span>
-                        <span className="text-sm font-black text-[#00FF66]">{selectedTeam.odds.homeWin}</span>
-                      </div>
-                      <div className="p-2 bg-[#13131A] rounded border border-[#252535] font-mono">
-                        <span className="text-[10px] text-[#888899] block mb-0.5">平局</span>
-                        <span className="text-sm font-black text-white">{selectedTeam.odds.draw}</span>
-                      </div>
-                      <div className="p-2 bg-[#13131A] rounded border border-[#252535] font-mono">
-                        <span className="text-[10px] text-[#888899] block mb-0.5">客胜</span>
-                        <span className="text-sm font-black text-[#FF3333]">{selectedTeam.odds.awayWin}</span>
+                  {/* 即时指数对冲大盘 */}
+                  {isOddsLoading ? (
+                    <div className="bg-[#1C1C26] p-4 rounded-lg border border-[#252535] space-y-3 relative overflow-hidden animate-pulse">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                        <Activity className="w-4 h-4 text-[#00FF66]" />
+                        <span>正在接入机构量化概率指数...</span>
+                      </h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="h-12 bg-[#13131A] rounded border border-[#252535]" />
+                        <div className="h-12 bg-[#13131A] rounded border border-[#252535]" />
+                        <div className="h-12 bg-[#13131A] rounded border border-[#252535]" />
                       </div>
                     </div>
-                    <div className="flex justify-between items-center text-[10px] text-[#888899] font-mono mt-2 pt-2 border-t border-[#1E1E2E]">
-                      <span>返还率: <span className="text-[#00FF66]">{selectedTeam.odds.payout}%</span></span>
-                      <span>对冲风控评级: <span className="text-white">中度风控区</span></span>
+                  ) : (
+                    <div className="bg-[#1C1C26] p-4 rounded-lg border border-[#252535] space-y-3 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
+                      <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                        <Activity className="w-4 h-4 text-[#00FF66]" />
+                        <span>即时指数对冲大盘 ({liveOdds ? liveOdds.data_source : "全球风控精算大盘A"})</span>
+                      </h3>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="p-2 bg-[#13131A] rounded border border-[#252535] font-mono">
+                          <span className="text-[10px] text-[#888899] block mb-0.5">主场成功系数</span>
+                          <span className="text-sm font-black text-[#00FF66]">
+                            {liveOdds ? liveOdds.main_success_factor : selectedTeam.odds.homeWin}
+                          </span>
+                        </div>
+                        <div className="p-2 bg-[#13131A] rounded border border-[#252535] font-mono">
+                          <span className="text-[10px] text-[#888899] block mb-0.5">平局避险系数</span>
+                          <span className="text-sm font-black text-white">
+                            {liveOdds ? liveOdds.draw_factor : selectedTeam.odds.draw}
+                          </span>
+                        </div>
+                        <div className="p-2 bg-[#13131A] rounded border border-[#252535] font-mono">
+                          <span className="text-[10px] text-[#888899] block mb-0.5">客场成功系数</span>
+                          <span className="text-sm font-black text-[#FF3333]">
+                            {liveOdds ? liveOdds.away_success_factor : selectedTeam.odds.awayWin}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-[#888899] font-mono mt-2 pt-2 border-t border-[#1E1E2E]">
+                        <span>理论精算返还率: <span className="text-[#00FF66]">{liveOdds ? liveOdds.theoretical_payout : selectedTeam.odds.payout}%</span></span>
+                        <span>对冲风控评级: <span className="text-white">{selectedTeam.dangerLevel}</span></span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* 物理环境与主裁判 */}
                   <div className="bg-[#1C1C26] p-4 rounded-lg border border-[#252535] space-y-3">
@@ -1780,19 +1988,46 @@ export default function WorldCupHome() {
                   <div className="bg-[#1C1C26] p-4 rounded-lg border border-[#252535] space-y-3 relative overflow-hidden">
                     {/* 微光风效 */}
                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
-                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5 relative z-10">
-                      <Award className="w-4 h-4 text-[#00FF66]" />
-                      <span>🤖 AI 战术深度剖析</span>
-                    </h3>
-                    {isPredictLoading ? (
+                    <div className="flex justify-between items-center relative z-10">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                        <Award className="w-4 h-4 text-[#00FF66]" />
+                        <span>🤖 AI 战术深度剖析</span>
+                      </h3>
+                      {geminiTactics[selectedTeam.id] && (
+                        <span className="text-[9px] bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30 px-1.5 py-0.5 rounded font-mono">
+                          实时精算版
+                        </span>
+                      )}
+                    </div>
+
+                    {isPredictLoading || isGeminiTacticsLoading ? (
                       <div className="space-y-2 relative z-10 animate-pulse">
                         <div className="h-3 bg-[#13131A] rounded w-full" />
                         <div className="h-3 bg-[#13131A] rounded w-5/6" />
                       </div>
                     ) : (
                       <p className="text-xs text-[#888899] leading-relaxed relative z-10 font-mono">
-                        {predictions[selectedTeam.id]?.tacticalAnalysis || getTacticalAnalysisFallback(selectedTeam)}
+                        {geminiTactics[selectedTeam.id] || predictions[selectedTeam.id]?.tacticalAnalysis || getTacticalAnalysisFallback(selectedTeam)}
                       </p>
+                    )}
+
+                    {!isPredictLoading && !isGeminiTacticsLoading && (
+                      <button
+                        onClick={() => handleTriggerTacticsAi(selectedTeam)}
+                        disabled={geminiTacticsCooldown > 0}
+                        className={`w-full mt-2 py-2 px-3 border text-xs font-mono rounded transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                          geminiTacticsCooldown > 0
+                            ? "bg-zinc-800/20 border-zinc-700/30 text-[#888899] cursor-not-allowed opacity-60"
+                            : "bg-[#00FF66]/10 border-[#00FF66]/30 text-[#00FF66] hover:bg-[#00FF66]/20 active:scale-[0.98]"
+                        }`}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${geminiTacticsCooldown > 0 ? "" : "animate-spin-slow"}`} />
+                        <span>
+                          {geminiTacticsCooldown > 0
+                            ? `大盘防刷冷却中 (${geminiTacticsCooldown}s)`
+                            : "🔄 激活量化精算分析"}
+                        </span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1836,19 +2071,46 @@ export default function WorldCupHome() {
 
                   <div className="bg-[#00FF66]/5 p-4 rounded-lg border border-[#00FF66]/20 space-y-2 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
-                    <div className="flex items-center gap-1.5 text-xs text-[#00FF66] font-bold relative z-10">
-                      <Compass className="w-4 h-4 animate-[spin_6s_linear_infinite]" />
-                      <span>🔮 AI 玄学星盘点评</span>
+                    <div className="flex justify-between items-center relative z-10">
+                      <div className="flex items-center gap-1.5 text-xs text-[#00FF66] font-bold">
+                        <Compass className="w-4 h-4 animate-[spin_6s_linear_infinite]" />
+                        <span>🔮 AI 玄学星盘点评</span>
+                      </div>
+                      {geminiMeta[selectedTeam.id] && (
+                        <span className="text-[9px] bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30 px-1.5 py-0.5 rounded font-mono">
+                          流时天机版
+                        </span>
+                      )}
                     </div>
-                    {isPredictLoading ? (
+                    
+                    {isPredictLoading || isGeminiMetaLoading ? (
                       <div className="space-y-2 relative z-10 animate-pulse">
                         <div className="h-3 bg-[#13131A] rounded w-full" />
                         <div className="h-3 bg-[#13131A] rounded w-4/5" />
                       </div>
                     ) : (
                       <p className="text-xs text-[#888899] leading-relaxed relative z-10 font-mono">
-                        {predictions[selectedTeam.id]?.metaphysicalAnalysis || getMetaphysicalAnalysisFallback(selectedTeam)}
+                        {geminiMeta[selectedTeam.id] || predictions[selectedTeam.id]?.metaphysicalAnalysis || getMetaphysicalAnalysisFallback(selectedTeam)}
                       </p>
+                    )}
+
+                    {!isPredictLoading && !isGeminiMetaLoading && (
+                      <button
+                        onClick={() => handleTriggerMetaAi(selectedTeam)}
+                        disabled={geminiMetaCooldown > 0}
+                        className={`w-full mt-2 py-2 px-3 border text-xs font-mono rounded transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                          geminiMetaCooldown > 0
+                            ? "bg-zinc-800/20 border-zinc-700/30 text-[#888899] cursor-not-allowed opacity-60"
+                            : "bg-[#00FF66]/10 border-[#00FF66]/30 text-[#00FF66] hover:bg-[#00FF66]/20 active:scale-[0.98]"
+                        }`}
+                      >
+                        <Compass className={`w-3.5 h-3.5 ${geminiMetaCooldown > 0 ? "" : "animate-spin-slow"}`} />
+                        <span>
+                          {geminiMetaCooldown > 0
+                            ? `天机大盘冷却中 (${geminiMetaCooldown}s)`
+                            : "🔮 观星占卜流时化忌"}
+                        </span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1970,7 +2232,7 @@ export default function WorldCupHome() {
                 <span className="text-[#00FF66] font-bold">乾乾兑兑 · 大吉大利</span>
               </div>
               <a
-                href={REDIRECT_URL}
+                href={getRedirectUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-3 bg-[#00FF66] text-[#0D0D11] rounded-lg font-black text-xs md:text-sm text-center flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all animate-[breathe-glow_2s_infinite]"
