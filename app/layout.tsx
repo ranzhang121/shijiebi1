@@ -1,12 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-  variable: "--font-inter",
-});
 
 export const metadata: Metadata = {
   title: "2026 世界杯 AI+玄学数据平台 | 美加墨世界杯",
@@ -21,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={inter.variable}>
+    <html lang="zh-CN">
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );
