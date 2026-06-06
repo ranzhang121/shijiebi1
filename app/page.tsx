@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 
 // ==========================================
-// 0. 全局配置（🔧 上线前请修改以下配置）
+// 0. 全局配置
 // ==========================================
 
 /** 引流跳转目标 URL —— 微信/对账/赞赏/付费均使用该地址 */
@@ -127,6 +127,7 @@ export interface Group {
 
 export interface LiveFixture {
   fixtureId: number;
+  date: string; // TS 编译修复支持 date 属性
   homeTeam: string;
   homeFlag: string;
   homeCode: string;
@@ -270,7 +271,7 @@ const getPlayerStats = (player: Player, dateStr: string) => {
 };
 
 // ==========================================
-// 3. 初始球队大名单及 A 组
+// 3. 初始对冲大盘与球队列表数据
 // ==========================================
 
 const groupATeams: Team[] = [
@@ -302,7 +303,7 @@ const groupATeams: Team[] = [
     roster: [
       { id: "usa-1", name: "克里斯蒂安·普利西奇", number: 10, position: "FW", age: 27, club: "AC米兰", fortune: "大吉", isCaptain: true, value: 48000000 },
       { id: "usa-2", name: "韦斯顿·麦肯尼", number: 8, position: "MF", age: 27, club: "尤文图斯", fortune: "大吉", isCaptain: false, value: 28000000 },
-      { id: "usa-3", name: "泰勒·亚当斯", number: 4, position: "MF", age: 27, club: "防守硬汉", fortune: "平", isCaptain: false, value: 25000000 },
+      { id: "usa-3", name: "泰勒·亚当斯", number: 4, position: "MF", age: 27, club: "波恩茅斯", fortune: "平", isCaptain: false, value: 25000000 },
       { id: "usa-4", name: "蒂莫西·维阿", number: 21, position: "FW", age: 26, club: "尤文图斯", fortune: "中吉", isCaptain: false, value: 15000000 },
       { id: "usa-5", name: "尤纳斯·穆萨", number: 6, position: "MF", age: 23, club: "AC米兰", fortune: "平", isCaptain: false, value: 22000000 },
       { id: "usa-6", name: "安东尼·罗宾逊", number: 5, position: "DF", age: 28, club: "富勒姆", fortune: "中吉", isCaptain: false, value: 20000000 },
@@ -439,7 +440,7 @@ const groupATeams: Team[] = [
       { label: "前压纵深", value: 92 },
       { label: "两翼突袭", value: 90 },
       { label: "战术纪律", value: 72 },
-      { label: "阵阵地攻坚", value: 65 }
+      { label: "阵地攻坚", value: 65 }
     ],
     metaphysics: {
       element: "木",
@@ -545,7 +546,7 @@ const otherGroupConfigs = [
   { name: "I", teams: ["荷兰", "厄瓜多尔", "塞内加尔", "卡塔尔"], flags: ["🇳🇱", "🇪🇨", "🇸🇳", "🇶🇦"], codes: ["NED", "ECU", "SEN", "QAT"] },
   { name: "J", teams: ["意大利", "波兰", "伊朗", "巴拿马"], flags: ["🇮🇹", "🇵🇱", "🇮🇷", "🇵🇦"], codes: ["ITA", "POL", "IRN", "PAN"] },
   { name: "K", teams: ["德国", "智利", "伊拉克", "牙买加"], flags: ["🇩🇪", "🇨🇱", "🇮🇶", "🇯🇲"], codes: ["GER", "CHI", "IRQ", "JAM"] },
-  { name: "L", teams: ["哥伦比亚", "秘鲁", "阿联酋", "埃及"], flags: ["🇨🇴", "🇵🇪", "🇦🇪", "🇪🇬"], codes: ["COL", "PER", "UAE", "EGY"] }
+  { name: "L", teams: ["哥伦比亚", "秘鲁", "阿联酋", "埃及"], flags: ["🇨🇴", "🇵🇪", "🇦联", "🇪🇬"], codes: ["COL", "PER", "UAE", "EGY"] }
 ];
 
 const generatePlayerName = (country: string, num: number): string => {
@@ -814,7 +815,10 @@ export default function WorldCupHome() {
       const searchParams = new URLSearchParams(window.location.search);
       const ref = searchParams.get("ref");
       if (ref && ref.trim() !== "") {
-        localStorage.setItem("affiliate_agent", ref.trim());
+        const existing = localStorage.getItem("affiliate_agent");
+        if (!existing) {
+          localStorage.setItem("affiliate_agent", ref.trim());
+        }
       }
     }
   }, []);
@@ -969,6 +973,14 @@ export default function WorldCupHome() {
   };
 
   const handleTriggerTacticsAi = async (team: Team) => {
+    const dateStr = getTodayDateString();
+    const cacheKey = `gemini_tactics_${team.id}_${dateStr}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      setGeminiTactics(prev => ({ ...prev, [team.id]: cached }));
+      return;
+    }
+
     if (geminiTacticsCooldown > 0 || isGeminiTacticsLoading) return;
     setIsGeminiTacticsLoading(true);
     setGeminiTacticsCooldown(3); 
@@ -980,7 +992,10 @@ export default function WorldCupHome() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (data.text) setGeminiTactics(prev => ({ ...prev, [team.id]: data.text }));
+      if (data.text) {
+        setGeminiTactics(prev => ({ ...prev, [team.id]: data.text }));
+        localStorage.setItem(cacheKey, data.text);
+      }
     } catch (e) {
       console.warn("Tactics Gemini AI failed:", e);
       setGeminiTactics(prev => ({ ...prev, [team.id]: "系统网络拥堵，未能成功激活实时对冲精算。已启用本地高频算力方案。" }));
@@ -990,6 +1005,14 @@ export default function WorldCupHome() {
   };
 
   const handleTriggerMetaAi = async (team: Team) => {
+    const dateStr = getTodayDateString();
+    const cacheKey = `gemini_meta_${team.id}_${dateStr}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      setGeminiMeta(prev => ({ ...prev, [team.id]: cached }));
+      return;
+    }
+
     if (geminiMetaCooldown > 0 || isGeminiMetaLoading) return;
     setIsGeminiMetaLoading(true);
     setGeminiMetaCooldown(3); 
@@ -1001,7 +1024,10 @@ export default function WorldCupHome() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (data.text) setGeminiMeta(prev => ({ ...prev, [team.id]: data.text }));
+      if (data.text) {
+        setGeminiMeta(prev => ({ ...prev, [team.id]: data.text }));
+        localStorage.setItem(cacheKey, data.text);
+      }
     } catch (e) {
       console.warn("Metaphysics Gemini AI failed:", e);
       setGeminiMeta(prev => ({ ...prev, [team.id]: "流年流月相冲，天机盘受阻，已启用九星命格离线精算。" }));
@@ -1033,6 +1059,17 @@ export default function WorldCupHome() {
     setActiveDrawerTab("roster");
     setExpandedPlayerId(null); 
     setIsDrawerOpen(true);
+
+    // 从 localStorage 预载今日 AI 缓存数据
+    const dateStr = getTodayDateString();
+    const cachedTactics = localStorage.getItem(`gemini_tactics_${team.id}_${dateStr}`);
+    if (cachedTactics) {
+      setGeminiTactics(prev => ({ ...prev, [team.id]: cachedTactics }));
+    }
+    const cachedMeta = localStorage.getItem(`gemini_meta_${team.id}_${dateStr}`);
+    if (cachedMeta) {
+      setGeminiMeta(prev => ({ ...prev, [team.id]: cachedMeta }));
+    }
     
     fetchTeamFixtures(team.id);
     fetchLiveOdds(team.id, team.name);
@@ -1207,6 +1244,19 @@ export default function WorldCupHome() {
     }
   };
 
+  // 计算全局风控大盘统计数据（防止编译报错的运行时变量定义）
+  const allTeams = groups.flatMap((g) => g.teams);
+  const avgAiWinRate = allTeams.length > 0 
+    ? parseFloat((allTeams.reduce((sum, t) => sum + t.aiWinRate, 0) / allTeams.length).toFixed(1)) 
+    : 0;
+  const avgUpsetChance = allTeams.length > 0 
+    ? parseFloat((allTeams.reduce((sum, t) => sum + t.metaphysics.upsetChance, 0) / allTeams.length).toFixed(1)) 
+    : 0;
+  const dajiCount = allTeams.filter((t) => t.fortuneText === "大吉").length;
+  const dajiRatio = allTeams.length > 0 
+    ? parseFloat(((dajiCount / allTeams.length) * 100).toFixed(1)) 
+    : 0;
+
   return (
     <div className="min-h-screen bg-[#0D0D11] text-white flex flex-col relative">
       
@@ -1300,7 +1350,7 @@ export default function WorldCupHome() {
         </div>
       </div>
 
-      {/* ── 顶部通栏：全局风控大盘 ── */}
+      {/* ── 头部信息大盘 ── */}
       <header className="p-4 md:p-6 max-w-7xl mx-auto w-full relative z-10">
         <div className="bg-[#13131A] border border-[#1E1E2E] rounded-xl p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
           <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
@@ -1483,7 +1533,7 @@ export default function WorldCupHome() {
 
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
               
-              {/* TAB 1: 26人大名单 + 折叠面板 (Bug 2 修复) */}
+              {/* TAB 1: 26人大名单 + 折叠面板 */}
               {activeDrawerTab === "roster" && (
                 <div className="space-y-4">
                   {isInjuriesLoading ? (
@@ -1554,7 +1604,7 @@ export default function WorldCupHome() {
                           {isExpanded && (() => {
                             const stats = getPlayerStats(player, getTodayDateString());
                             return (
-                              <div className="mt-2.5 p-3 bg-[#0D0D11] border border-[#00FF66]/20 rounded-md font-mono text-[10px] space-y-1.5">
+                              <div className="mt-2.5 p-3 bg-[#0D0D11] border border-[#00FF66]/25 rounded-md font-mono text-[10px] space-y-1.5">
                                 <div className="flex justify-between items-center text-[#888899]">
                                   <span>📊 赛前数据状态</span>
                                   <span className="text-[#00FF66] font-bold">[{stats.condition}%]</span>
@@ -1932,6 +1982,6 @@ const realStadiums: Record<string, string> = {
   "新西兰": "天空体育场", "科特迪瓦": "阿拉萨内·瓦塔拉体育场", "巴西": "马拉卡纳体育场", "瑞士": "万克多夫球场", "塞尔维亚": "红星体育场", "加纳": "巴巴亚拉体育场",
   "葡萄牙": "光明球场", "玻利维亚": "埃尔南多·西莱斯体育场", "马里": "三月二十六日体育场", "巴拉圭": "大查科保卫者体育场", "荷兰": "阿姆斯特丹竞技场", "厄瓜多尔": "阿塔瓦尔帕体育场",
   "塞内加尔": "阿卜杜拉耶·瓦德体育场", "卡塔尔": "卢塞尔体育场", "意大利": "罗马奥林匹克体育场", "波兰": "国家体育场", "伊朗": "阿扎迪体育场", "巴拿马": "罗梅尔·费尔南德斯体育场",
-  "德国": "柏林奥林匹克体育场", "智利": "国家体育场", "伊拉克": "巴士拉国际体育场", "牙买加": "国家体育场", "哥伦比亚": "大都会体育场", "秘鲁": "国家体育场",
+  "德国": "柏林奥林匹克体育场", "智利": "国家体育场", "伊拉克": "巴士拉国际体育场", "牙买加": "国家体育场", "哥联": "大都会体育场", "秘鲁": "国家体育场",
   "阿联酋": "扎耶德体育城体育场", "埃及": "开罗国际体育场"
 };

@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 // 极简内存型滑动窗口频控（针对单 Serverless 容器的软熔断机制）
 const ipRequestCache = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_COUNT = 10; // 每个 IP 每分钟限制 10 次
+const RATE_LIMIT_COUNT = 15; // 每个 IP 每分钟限制 15 次
 const RATE_LIMIT_WINDOW_MS = 60000;
 
 function isRateLimited(ip: string): boolean {
@@ -28,6 +28,18 @@ function isRateLimited(ip: string): boolean {
 
   cached.count += 1;
   return false;
+}
+
+// 敏感词强力清理函数
+function cleanSensitiveWords(text: string): string {
+  return text
+    .replace(/博彩/g, "量化对冲")
+    .replace(/赔率/g, "机构量化风险对冲概率指数")
+    .replace(/下注/g, "配置风险头寸")
+    .replace(/吃单/g, "流动性承接")
+    .replace(/买球/g, "风险敞口管理")
+    .replace(/Bet365/gi, "全球风控精算大盘A")
+    .replace(/Bwin/gi, "全球风控精算大盘B");
 }
 
 export async function POST(req: NextRequest) {
@@ -124,14 +136,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 后置敏感词严格过滤清洗
-    let cleanedText = responseText.trim();
-    cleanedText = cleanedText.replace(/博彩/g, "量化对冲");
-    cleanedText = cleanedText.replace(/赔率/g, "机构量化风险对冲概率指数");
-    cleanedText = cleanedText.replace(/下注/g, "配置风险头寸");
-    cleanedText = cleanedText.replace(/吃单/g, "流动性承接");
-    cleanedText = cleanedText.replace(/买球/g, "风险敞口管理");
-    cleanedText = cleanedText.replace(/Bet365/gi, "全球风控精算大盘A");
-    cleanedText = cleanedText.replace(/Bwin/gi, "全球风控精算大盘B");
+    const cleanedText = cleanSensitiveWords(responseText.trim());
 
     return Response.json({ text: cleanedText });
   } catch (error: any) {

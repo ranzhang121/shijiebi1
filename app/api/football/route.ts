@@ -73,6 +73,30 @@ const MOCK_INJURIES: Record<string, Array<{ player: string; position: string; re
   ]
 };
 
+// 后置敏感词严格过滤清洗
+function cleanSensitiveWords(text: string): string {
+  return text
+    .replace(/博彩/g, "量化对冲")
+    .replace(/赔率/g, "机构量化风险对冲概率指数")
+    .replace(/下注/g, "配置风险头寸")
+    .replace(/吃单/g, "流动性承接")
+    .replace(/买球/g, "风险敞口管理")
+    .replace(/Bet365/gi, "全球风控精算大盘A")
+    .replace(/Bwin/gi, "全球风控精算大盘B");
+}
+
+function createCleanResponse(data: any, init?: ResponseInit) {
+  const jsonString = JSON.stringify(data);
+  const cleanedString = cleanSensitiveWords(jsonString);
+  return new Response(cleanedString, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const type = searchParams.get("type");
@@ -85,7 +109,7 @@ export async function GET(request: NextRequest) {
   // 1. 获取交战大盘或实时滚球日程 (type = live | type = fixtures)
   if (type === "live" || type === "fixtures") {
     if (!hasKey) {
-      return Response.json({ fixtures: MOCK_FIXTURES, degraded: true, reason: "FOOTBALL_API_KEY 未配置，使用精算模拟交战大盘" });
+      return createCleanResponse({ fixtures: MOCK_FIXTURES, degraded: true, reason: "FOOTBALL_API_KEY 未配置，使用精算模拟交战大盘" });
     }
 
     try {
@@ -107,7 +131,7 @@ export async function GET(request: NextRequest) {
       const rawData = json?.response ?? [];
 
       if (rawData.length === 0) {
-        return Response.json({ fixtures: MOCK_FIXTURES, degraded: true, reason: "API 数据为空，启动高仿真模拟盘口" });
+        return createCleanResponse({ fixtures: MOCK_FIXTURES, degraded: true, reason: "API 数据为空，启动高仿真模拟盘口" });
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,10 +152,10 @@ export async function GET(request: NextRequest) {
         venue: item?.fixture?.venue?.name ?? ""
       }));
 
-      return Response.json({ fixtures, degraded: false });
+      return createCleanResponse({ fixtures, degraded: false });
     } catch (err: any) {
       console.error("[/api/football?type=fixtures] Error:", err);
-      return Response.json({ fixtures: MOCK_FIXTURES, degraded: true, error: err.message });
+      return createCleanResponse({ fixtures: MOCK_FIXTURES, degraded: true, error: err.message });
     }
   }
 
@@ -142,7 +166,7 @@ export async function GET(request: NextRequest) {
       const fallback = teamId && MOCK_INJURIES[teamId] ? MOCK_INJURIES[teamId] : [
         { player: "Key Core Player", position: "中轴核心", reason: "战术风控避险", severity: "轻度 (观察中)" }
       ];
-      return Response.json({ injuries: fallback, degraded: true });
+      return createCleanResponse({ injuries: fallback, degraded: true });
     }
 
     try {
@@ -169,7 +193,7 @@ export async function GET(request: NextRequest) {
         const fallback = teamId && MOCK_INJURIES[teamId] ? MOCK_INJURIES[teamId] : [
           { player: "Key Core Player", position: "中轴核心", reason: "战术风控避险", severity: "轻度 (观察中)" }
         ];
-        return Response.json({ injuries: fallback, degraded: true });
+        return createCleanResponse({ injuries: fallback, degraded: true });
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,21 +204,21 @@ export async function GET(request: NextRequest) {
         severity: item?.injury?.detail ?? "中度 (观察中)"
       }));
 
-      return Response.json({ injuries, degraded: false });
+      return createCleanResponse({ injuries, degraded: false });
     } catch (err: any) {
       console.error("[/api/football?type=injuries] Error:", err);
-      return Response.json({ injuries: [], degraded: true, error: err.message });
+      return createCleanResponse({ injuries: [], degraded: true, error: err.message });
     }
   }
 
   // 3. 获取实时盘口概率 (type = odds)
   if (type === "odds") {
     if (!fixtureId) {
-      return Response.json({ error: "Missing fixtureId query parameter" }, { status: 400 });
+      return createCleanResponse({ error: "Missing fixtureId query parameter" }, { status: 400 });
     }
 
     if (!hasKey) {
-      return Response.json({
+      return createCleanResponse({
         odds: {
           data_source: "全球风控精算大盘A",
           main_success_factor: 2.10,
@@ -207,8 +231,9 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+      // 抓取该比赛的所有 odds，我们解析 Bet365 (id = 8) 或 Bwin (id = 11)
       const res = await fetch(
-        `https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=8`,
+        `https://v3.football.api-sports.io/odds?fixture=${fixtureId}`,
         {
           headers: {
             "X-RapidAPI-Key": apiKey!,
@@ -223,7 +248,7 @@ export async function GET(request: NextRequest) {
       const rawData = json?.response ?? [];
 
       if (rawData.length === 0) {
-        return Response.json({
+        return createCleanResponse({
           odds: {
             data_source: "全球风控精算大盘A",
             main_success_factor: 2.15,
@@ -236,8 +261,10 @@ export async function GET(request: NextRequest) {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bookmaker = rawData[0]?.bookmakers?.find((b: any) => b?.id === 8 || b?.name?.toLowerCase().includes("365")) 
-        || rawData[0]?.bookmakers?.[0];
+      const bookmakers = rawData[0]?.bookmakers ?? [];
+      const bet365 = bookmakers.find((b: any) => b?.id === 8 || b?.name?.toLowerCase().includes("365"));
+      const bwin = bookmakers.find((b: any) => b?.id === 11 || b?.name?.toLowerCase().includes("bwin"));
+      const bookmaker = bet365 || bwin || bookmakers[0];
 
       if (!bookmaker) {
         throw new Error("No bookmaker data available");
@@ -256,9 +283,16 @@ export async function GET(request: NextRequest) {
 
       const payout = parseFloat((100 / ((1 / homeVal) + (1 / drawVal) + (1 / awayVal))).toFixed(2));
 
-      return Response.json({
+      let dataSource = "全球风控精算大盘A";
+      if (bookmaker.id === 11 || bookmaker.name?.toLowerCase().includes("bwin")) {
+        dataSource = "全球风控精算大盘B";
+      } else if (bookmaker.id !== 8) {
+        dataSource = `全球风控精算大盘C (${bookmaker.name})`;
+      }
+
+      return createCleanResponse({
         odds: {
-          data_source: bookmaker?.id === 8 ? "全球风控精算大盘A" : "全球风控精算大盘B",
+          data_source: dataSource,
           main_success_factor: homeVal,
           draw_factor: drawVal,
           away_success_factor: awayVal,
@@ -268,7 +302,7 @@ export async function GET(request: NextRequest) {
       });
     } catch (err: any) {
       console.error("[/api/football?type=odds] Error:", err);
-      return Response.json({
+      return createCleanResponse({
         odds: {
           data_source: "全球风控精算大盘A",
           main_success_factor: 2.15,
@@ -282,5 +316,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return Response.json({ error: "Invalid type parameter" }, { status: 400 });
+  return createCleanResponse({ error: "Invalid type parameter" }, { status: 400 });
 }
